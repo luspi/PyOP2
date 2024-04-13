@@ -11,12 +11,12 @@ from pyop2 import (
     mpi,
     utils
 )
+from pyop2.offload_utils import OffloadMixin
 from pyop2.types.access import Access
-from pyop2.types.dataset import GlobalDataSet
 from pyop2.types.data_carrier import DataCarrier, EmptyDataMixin, VecAccessMixin
 
 
-class SetFreeDataCarrier(DataCarrier, EmptyDataMixin):
+class SetFreeDataCarrier(DataCarrier, EmptyDataMixin, OffloadMixin):
 
     @utils.validate_type(('name', str, ex.NameTypeError))
     def __init__(self, dim, data=None, dtype=None, name=None):
@@ -251,11 +251,11 @@ class Global(SetFreeDataCarrier, VecAccessMixin):
 
     def __str__(self):
         return "OP2 Global Argument: %s with dim %s and value %s" \
-            % (self._name, self._dim, self._data)
+            % (self._name, self._dim, self.data_ro)
 
     def __repr__(self):
-        return "Global(%r, %r, %r, %r)" % (self._dim, self._data,
-                                           self._data.dtype, self._name)
+        return "Global(%r, %r, %r, %r)" % (self._dim, self.data_ro,
+                                           self.data.dtype, self._name)
 
     @utils.validate_in(('access', _modes, ex.ModeValueError))
     def __call__(self, access, map_=None):
@@ -275,7 +275,8 @@ class Global(SetFreeDataCarrier, VecAccessMixin):
 
     @utils.cached_property
     def dataset(self):
-        return GlobalDataSet(self)
+        from pyop2.op2 import compute_backend
+        return compute_backend.GlobalDataSet(self)
 
     @mpi.collective
     def duplicate(self):
@@ -361,10 +362,13 @@ class Global(SetFreeDataCarrier, VecAccessMixin):
         """A context manager for a :class:`PETSc.Vec` from a :class:`Global`.
 
         :param access: Access descriptor: READ, WRITE, or RW."""
-        yield self._vec
-        if access is not Access.READ:
-            data = self._data
-            self.comm.Bcast(data, 0)
+        raise NotImplementedError()
+
+    def ensure_availability_on_host(self):
+        raise NotImplementedError()
+
+    def ensure_availability_on_device(self):
+        raise NotImplementedError()
 
 
 # has no comm, can only be READ
